@@ -1,403 +1,638 @@
+--------------------------------------------------
+-- SERVICES
+--------------------------------------------------
+
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local Lighting = game:GetService("Lighting")
 local SoundService = game:GetService("SoundService")
+local GuiService = game:GetService("GuiService")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
+local camera = workspace.CurrentCamera
+
+--------------------------------------------------
+-- WAIT LOAD
+--------------------------------------------------
+
+repeat
+	task.wait()
+until game:IsLoaded()
+
+task.wait(2)
 
 --------------------------------------------------
 -- REMOVE OLD GUI
 --------------------------------------------------
 
-pcall(function()
-	local old = playerGui:FindFirstChild("JumpGUIV3")
-	if old then
-		old:Destroy()
+for _,v in pairs(playerGui:GetChildren()) do
+	if v.Name == "JumpGUIV4" then
+		v:Destroy()
 	end
-end)
+end
 
 --------------------------------------------------
--- DEVICE CHECK
+-- BLUR
 --------------------------------------------------
 
-local isMobile = UIS.TouchEnabled and not UIS.KeyboardEnabled
+local blur = Instance.new("BlurEffect")
+blur.Size = 0
+blur.Parent = Lighting
+
+local function enableBlur()
+
+	TweenService:Create(
+		blur,
+		TweenInfo.new(0.25),
+		{
+			Size = 16
+		}
+	):Play()
+end
+
+local function disableBlur()
+
+	TweenService:Create(
+		blur,
+		TweenInfo.new(0.25),
+		{
+			Size = 0
+		}
+	):Play()
+end
 
 --------------------------------------------------
 -- SOUND
 --------------------------------------------------
 
-local clickSound = Instance.new("Sound")
-clickSound.Parent = SoundService
-clickSound.SoundId = "rbxassetid://9118823101"
-clickSound.Volume = 0.5
+local whoosh = Instance.new("Sound")
+
+whoosh.SoundId = "rbxassetid://9118823101"
+whoosh.Volume = 0.6
+whoosh.Parent = SoundService
+
+local function playWhoosh()
+
+	pcall(function()
+		whoosh:Play()
+	end)
+end
 
 --------------------------------------------------
 -- GUI
 --------------------------------------------------
 
 local gui = Instance.new("ScreenGui")
-gui.Name = "JumpGUIV3"
-gui.Parent = playerGui
+
+gui.Name = "JumpGUIV4"
 gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+gui.Parent = playerGui
 
 --------------------------------------------------
--- MAIN FRAME
+-- FORCE ROUNDED CORNERS
+--------------------------------------------------
+
+local function applyCorner(obj, radius)
+
+	local corner = Instance.new("UICorner")
+
+	corner.CornerRadius = UDim.new(0,radius)
+
+	corner.Parent = obj
+
+	obj.ClipsDescendants = true
+
+	return corner
+end
+
+--------------------------------------------------
+-- FRAME
 --------------------------------------------------
 
 local frame = Instance.new("Frame")
-frame.Parent = gui
-frame.Size = UDim2.new(0, 280, 0, 185)
-frame.Position = UDim2.new(0.1, 0, 0.3, 0)
-frame.BackgroundColor3 = Color3.fromRGB(163,255,137)
-frame.BorderColor3 = Color3.fromRGB(103,221,213)
+
+frame.Size = UDim2.new(0,320,0,200)
+frame.Position = UDim2.new(0,40,0,120)
+
+frame.BackgroundColor3 = Color3.fromRGB(30,30,35)
+frame.BackgroundTransparency = 0.45
+
 frame.Active = true
-frame.Draggable = true
+frame.Parent = gui
+
+applyCorner(frame,16)
+
+local savedPosition = frame.Position
+
+--------------------------------------------------
+-- RAINBOW BORDER
+--------------------------------------------------
+
+local stroke = Instance.new("UIStroke")
+
+stroke.Thickness = 2
+stroke.Transparency = 0.1
+stroke.Parent = frame
+
+task.spawn(function()
+
+	local h = 0
+
+	while task.wait(0.02) do
+
+		h += 0.003
+
+		if h > 1 then
+			h = 0
+		end
+
+		stroke.Color = Color3.fromHSV(h,1,1)
+	end
+end)
 
 --------------------------------------------------
 -- TITLE
 --------------------------------------------------
 
 local title = Instance.new("TextLabel")
+
+title.Size = UDim2.new(1,0,0,30)
+
+title.BackgroundTransparency = 1
+title.Text = "Jump GUI V4"
+
+title.TextColor3 = Color3.fromRGB(255,255,255)
+
+title.Font = Enum.Font.GothamBold
+title.TextSize = 16
+
 title.Parent = frame
-title.Size = UDim2.new(0, 150, 0, 30)
-title.Position = UDim2.new(0, 90, 0, 0)
-title.BackgroundColor3 = Color3.fromRGB(242,60,255)
-title.Text = "JUMP GUI V3"
-title.TextScaled = true
-title.Font = Enum.Font.SourceSansBold
-title.TextColor3 = Color3.new(0,0,0)
 
 --------------------------------------------------
--- CLOSE BUTTON
+-- JUMP SYSTEM
 --------------------------------------------------
 
-local closeBtn = Instance.new("TextButton")
-closeBtn.Parent = frame
-closeBtn.Size = UDim2.new(0,45,0,30)
-closeBtn.Position = UDim2.new(0,0,0,0)
-closeBtn.Text = "X"
-closeBtn.TextScaled = true
-closeBtn.BackgroundColor3 = Color3.fromRGB(225,25,0)
+local jumpEnabled = false
+local customJump = nil
+
+local function getHum()
+
+	local char = player.Character
+
+	if not char then
+		return
+	end
+
+	return char:FindFirstChild("Humanoid")
+end
+
+task.spawn(function()
+
+	while task.wait(0.25) do
+
+		local hum = getHum()
+
+		if hum and jumpEnabled then
+
+			hum.UseJumpPower = true
+
+			if customJump then
+				hum.JumpPower = customJump
+			end
+		end
+	end
+end)
 
 --------------------------------------------------
--- MINIMIZE BUTTON
+-- TOGGLE
+--------------------------------------------------
+
+local toggle = Instance.new("TextButton")
+
+toggle.Size = UDim2.new(0,150,0,35)
+toggle.Position = UDim2.new(0,10,0,60)
+
+toggle.BackgroundTransparency = 0.3
+toggle.BackgroundColor3 = Color3.fromRGB(40,40,45)
+
+toggle.Text = "JumpBoost OFF"
+
+toggle.TextColor3 = Color3.fromRGB(255,255,255)
+
+toggle.Font = Enum.Font.GothamBold
+toggle.TextSize = 14
+
+toggle.Parent = frame
+
+applyCorner(toggle,999)
+
+toggle.MouseButton1Click:Connect(function()
+
+	jumpEnabled = not jumpEnabled
+
+	toggle.Text = jumpEnabled
+		and "JumpBoost ON"
+		or "JumpBoost OFF"
+end)
+
+--------------------------------------------------
+-- JUMP VALUE
+--------------------------------------------------
+
+local box = Instance.new("TextBox")
+
+box.Size = UDim2.new(0,150,0,30)
+box.Position = UDim2.new(0,10,0,110)
+
+box.BackgroundTransparency = 0.35
+box.BackgroundColor3 = Color3.fromRGB(40,40,45)
+
+box.PlaceholderText = "Jump Value"
+
+box.TextColor3 = Color3.fromRGB(255,255,255)
+
+box.Font = Enum.Font.Gotham
+box.TextSize = 14
+
+box.Parent = frame
+
+applyCorner(box,999)
+
+box:GetPropertyChangedSignal("Text"):Connect(function()
+
+	customJump = tonumber(box.Text)
+end)
+
+--------------------------------------------------
+-- BUTTONS
 --------------------------------------------------
 
 local miniBtn = Instance.new("TextButton")
-miniBtn.Parent = frame
-miniBtn.Size = UDim2.new(0,45,0,30)
-miniBtn.Position = UDim2.new(0,45,0,0)
+
+miniBtn.Size = UDim2.new(0,30,0,30)
+miniBtn.Position = UDim2.new(1,-70,0,5)
+
+miniBtn.BackgroundTransparency = 0.3
+miniBtn.BackgroundColor3 = Color3.fromRGB(0,0,0)
+
 miniBtn.Text = "-"
-miniBtn.TextScaled = true
-miniBtn.BackgroundColor3 = Color3.fromRGB(192,150,230)
+
+miniBtn.TextColor3 = Color3.fromRGB(255,255,255)
+
+miniBtn.Font = Enum.Font.GothamBold
+miniBtn.TextSize = 18
+
+miniBtn.Parent = frame
+
+applyCorner(miniBtn,999)
 
 --------------------------------------------------
--- STATE
+
+local closeBtn = Instance.new("TextButton")
+
+closeBtn.Size = UDim2.new(0,30,0,30)
+closeBtn.Position = UDim2.new(1,-35,0,5)
+
+closeBtn.BackgroundTransparency = 0.15
+closeBtn.BackgroundColor3 = Color3.fromRGB(255,0,0)
+
+closeBtn.Text = "X"
+
+closeBtn.TextColor3 = Color3.fromRGB(255,255,255)
+
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.TextSize = 14
+
+closeBtn.Parent = frame
+
+applyCorner(closeBtn,999)
+
+--------------------------------------------------
+-- MIN BAR
 --------------------------------------------------
 
-local multiplier = 1
-local jumpEnabled = false
-local originalJump = nil
+local bar = Instance.new("Frame")
+
+bar.Size = UDim2.new(0,220,0,40)
+
+bar.BackgroundColor3 = Color3.fromRGB(25,25,25)
+bar.BackgroundTransparency = 0.45
+
+bar.Visible = false
+bar.Active = true
+
+bar.Parent = gui
+
+applyCorner(bar,999)
+
+--------------------------------------------------
+-- BAR BORDER
+--------------------------------------------------
+
+local barStroke = Instance.new("UIStroke")
+
+barStroke.Thickness = 2
+barStroke.Transparency = 0.2
+
+barStroke.Parent = bar
+
+task.spawn(function()
+
+	local h = 0.5
+
+	while task.wait(0.02) do
+
+		h += 0.003
+
+		if h > 1 then
+			h = 0
+		end
+
+		barStroke.Color = Color3.fromHSV(h,1,1)
+	end
+end)
+
+--------------------------------------------------
+-- BAR TEXT
+--------------------------------------------------
+
+local barText = Instance.new("TextLabel")
+
+barText.Size = UDim2.new(1,0,1,0)
+
+barText.BackgroundTransparency = 1
+barText.Text = "Jump GUI V4"
+
+barText.TextColor3 = Color3.fromRGB(255,255,255)
+
+barText.Font = Enum.Font.GothamBold
+barText.TextSize = 14
+
+barText.Parent = bar
 
 --------------------------------------------------
 -- PLUS BUTTON
 --------------------------------------------------
 
-local plusBtn = Instance.new("TextButton")
-plusBtn.Parent = frame
-plusBtn.Size = UDim2.new(0,45,0,30)
-plusBtn.Position = UDim2.new(0,0,0,45)
-plusBtn.Text = "+"
-plusBtn.TextScaled = true
-plusBtn.BackgroundColor3 = Color3.fromRGB(133,145,255)
+local plus = Instance.new("TextButton")
+
+plus.Size = UDim2.new(0,40,0,40)
+
+plus.BackgroundColor3 = Color3.fromRGB(0,0,0)
+plus.BackgroundTransparency = 0.35
+
+plus.Text = "+"
+
+plus.TextColor3 = Color3.fromRGB(255,255,255)
+
+plus.Font = Enum.Font.GothamBold
+plus.TextSize = 18
+
+plus.Visible = false
+plus.Active = true
+
+plus.Parent = gui
+
+applyCorner(plus,999)
 
 --------------------------------------------------
--- MINUS BUTTON
+-- SNAP SYSTEM
 --------------------------------------------------
 
-local minusBtn = Instance.new("TextButton")
-minusBtn.Parent = frame
-minusBtn.Size = UDim2.new(0,45,0,30)
-minusBtn.Position = UDim2.new(0,0,0,82)
-minusBtn.Text = "-"
-minusBtn.TextScaled = true
-minusBtn.BackgroundColor3 = Color3.fromRGB(123,255,247)
+local function snapToEdge(guiObject)
 
---------------------------------------------------
--- MULTIPLIER LABEL
---------------------------------------------------
+	local viewport = camera.ViewportSize
 
-local multLabel = Instance.new("TextLabel")
-multLabel.Parent = frame
-multLabel.Size = UDim2.new(0,80,0,30)
-multLabel.Position = UDim2.new(0,55,0,45)
-multLabel.BackgroundColor3 = Color3.fromRGB(255,85,0)
-multLabel.Text = "x1"
-multLabel.TextScaled = true
+	local posX = guiObject.Position.X.Offset
+	local posY = guiObject.Position.Y.Offset
 
---------------------------------------------------
--- JUMP BOX
---------------------------------------------------
+	local sizeX = guiObject.AbsoluteSize.X
+	local sizeY = guiObject.AbsoluteSize.Y
 
-local jumpBox = Instance.new("TextBox")
-jumpBox.Parent = frame
-jumpBox.Size = UDim2.new(0,140,0,30)
-jumpBox.Position = UDim2.new(0,130,0,45)
-jumpBox.PlaceholderText = "Example Jump: 350"
-jumpBox.Text = ""
-jumpBox.TextScaled = true
-jumpBox.BackgroundColor3 = Color3.fromRGB(255,255,255)
+	local leftDist = posX
+	local rightDist = viewport.X - (posX + sizeX)
 
---------------------------------------------------
--- TOGGLE BUTTON
---------------------------------------------------
+	local topDist = posY
+	local bottomDist = viewport.Y - (posY + sizeY)
 
-local toggleBtn = Instance.new("TextButton")
-toggleBtn.Parent = frame
-toggleBtn.Size = UDim2.new(0,170,0,40)
-toggleBtn.Position = UDim2.new(0,55,0,110)
-toggleBtn.Text = "JUMPBOOST OFF"
-toggleBtn.TextScaled = true
-toggleBtn.BackgroundColor3 = Color3.fromRGB(255,80,80)
+	local minDist = math.min(
+		leftDist,
+		rightDist,
+		topDist,
+		bottomDist
+	)
 
---------------------------------------------------
--- KEYBIND (PC ONLY)
---------------------------------------------------
+	local targetX = posX
+	local targetY = posY
 
-local bindKey = Enum.KeyCode.K
-local waitingBind = false
-local bindBtn
+	if minDist == leftDist then
 
-if not isMobile then
+		targetX = 8
 
-	bindBtn = Instance.new("TextButton")
-	bindBtn.Parent = frame
-	bindBtn.Size = UDim2.new(0,90,0,25)
-	bindBtn.Position = UDim2.new(0,180,0,155)
-	bindBtn.Text = "KEY: K"
-	bindBtn.TextScaled = true
-	bindBtn.BackgroundColor3 = Color3.fromRGB(79,255,152)
+	elseif minDist == rightDist then
 
-end
+		targetX = viewport.X - sizeX - 8
 
---------------------------------------------------
--- GET HUMANOID
---------------------------------------------------
+	elseif minDist == topDist then
 
-local function getHum()
+		targetY = 8
 
-	local char = player.Character
-	if not char then return nil end
+	elseif minDist == bottomDist then
 
-	return char:FindFirstChild("Humanoid")
+		targetY = viewport.Y - sizeY - 8
+	end
 
-end
+	TweenService:Create(
+		guiObject,
+		TweenInfo.new(
+			0.18,
+			Enum.EasingStyle.Quad,
+			Enum.EasingDirection.Out
+		),
+		{
+			Position = UDim2.new(
+				0,
+				targetX,
+				0,
+				targetY
+			)
+		}
+	):Play()
 
---------------------------------------------------
--- UPDATE ORIGINAL JUMP
---------------------------------------------------
+	savedPosition = UDim2.new(
+		0,
+		targetX,
+		0,
+		targetY
+	)
 
-local function updateOriginalJump()
+	if guiObject == bar then
 
-	local hum = getHum()
-	if not hum then return end
-
-	if not jumpEnabled then
-		originalJump = hum.JumpPower
+		plus.Position = UDim2.new(
+			0,
+			targetX + 225,
+			0,
+			targetY
+		)
 	end
 end
 
 --------------------------------------------------
--- APPLY JUMP
+-- DRAG SYSTEM
 --------------------------------------------------
 
-local function applyJump()
+local function enableDrag(guiObject, callback)
 
-	local hum = getHum()
-	if not hum then return end
+	local dragging = false
+	local dragInput
+	local dragStart
+	local startPos
 
-	hum.UseJumpPower = true
+	guiObject.InputBegan:Connect(function(input)
 
-	if not originalJump then
-		originalJump = hum.JumpPower
-	end
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+		or input.UserInputType == Enum.UserInputType.Touch then
 
-	local customJump = tonumber(jumpBox.Text)
+			dragging = true
 
-	if customJump and customJump > 0 then
+			dragStart = input.Position
+			startPos = guiObject.Position
 
-		hum.JumpPower = customJump
-		title.Text = "Jump " .. customJump
+			dragInput = input
 
-	else
-
-		hum.JumpPower = originalJump * multiplier
-		title.Text = "Jump x" .. multiplier
-
-	end
-end
-
---------------------------------------------------
--- ENABLE / DISABLE
---------------------------------------------------
-
-local function setJump(state)
-
-	jumpEnabled = state
-
-	local hum = getHum()
-	if not hum then return end
-
-	if state then
-
-		applyJump()
-
-		toggleBtn.Text = "JUMPBOOST ON"
-		toggleBtn.BackgroundColor3 = Color3.fromRGB(80,255,120)
-
-	else
-
-		if originalJump then
-			hum.JumpPower = originalJump
+			GuiService.MenuIsOpen = true
 		end
+	end)
 
-		title.Text = "JUMP GUI V3"
+	guiObject.InputChanged:Connect(function(input)
 
-		toggleBtn.Text = "JUMPBOOST OFF"
-		toggleBtn.BackgroundColor3 = Color3.fromRGB(255,80,80)
+		if input.UserInputType == Enum.UserInputType.MouseMovement
+		or input.UserInputType == Enum.UserInputType.Touch then
 
-	end
+			dragInput = input
+		end
+	end)
+
+	UIS.InputChanged:Connect(function(input)
+
+		if dragging and input == dragInput then
+
+			local delta = input.Position - dragStart
+
+			local newPos = UDim2.new(
+				startPos.X.Scale,
+				startPos.X.Offset + delta.X,
+				startPos.Y.Scale,
+				startPos.Y.Offset + delta.Y
+			)
+
+			guiObject.Position = newPos
+
+			if callback then
+				callback(newPos)
+			end
+		end
+	end)
+
+	UIS.InputEnded:Connect(function(input)
+
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+		or input.UserInputType == Enum.UserInputType.Touch then
+
+			dragging = false
+
+			snapToEdge(guiObject)
+
+			GuiService.MenuIsOpen = false
+		end
+	end)
+end
+
+--------------------------------------------------
+-- APPLY DRAG
+--------------------------------------------------
+
+enableDrag(frame,function(newPos)
+
+	savedPosition = newPos
+end)
+
+enableDrag(bar,function(newPos)
+
+	savedPosition = newPos
+
+	plus.Position = UDim2.new(
+		newPos.X.Scale,
+		newPos.X.Offset + 225,
+		newPos.Y.Scale,
+		newPos.Y.Offset
+	)
+end)
+
+--------------------------------------------------
+-- FUNCTIONS
+--------------------------------------------------
+
+local function minimize()
+
+	bar.Position = savedPosition
+
+	plus.Position = UDim2.new(
+		bar.Position.X.Scale,
+		bar.Position.X.Offset + 225,
+		bar.Position.Y.Scale,
+		bar.Position.Y.Offset
+	)
+
+	bar.Visible = true
+	plus.Visible = true
+
+	frame.Visible = false
+
+	disableBlur()
+	playWhoosh()
+end
+
+local function restore()
+
+	frame.Position = savedPosition
+
+	frame.Visible = true
+
+	bar.Visible = false
+	plus.Visible = false
+
+	enableBlur()
+	playWhoosh()
 end
 
 --------------------------------------------------
 -- BUTTON EVENTS
 --------------------------------------------------
 
-plusBtn.MouseButton1Click:Connect(function()
+miniBtn.MouseButton1Click:Connect(minimize)
 
-	multiplier += 1
-	multLabel.Text = "x" .. multiplier
+plus.MouseButton1Click:Connect(restore)
 
-	clickSound:Play()
+closeBtn.MouseButton1Click:Connect(function()
 
-	if jumpEnabled then
-		applyJump()
-	end
+	gui:Destroy()
 
-end)
-
-minusBtn.MouseButton1Click:Connect(function()
-
-	if multiplier > 1 then
-		multiplier -= 1
-	end
-
-	multLabel.Text = "x" .. multiplier
-
-	clickSound:Play()
-
-	if jumpEnabled then
-		applyJump()
-	end
-
-end)
-
-toggleBtn.MouseButton1Click:Connect(function()
-
-	clickSound:Play()
-
-	setJump(not jumpEnabled)
-
+	disableBlur()
 end)
 
 --------------------------------------------------
--- KEYBIND
+-- START
 --------------------------------------------------
 
-if not isMobile then
+pcall(function()
 
-	bindBtn.MouseButton1Click:Connect(function()
-
-		waitingBind = true
-		bindBtn.Text = "PRESS..."
-
-	end)
-
-	UIS.InputBegan:Connect(function(input,gp)
-
-		if gp then return end
-
-		if waitingBind and input.UserInputType == Enum.UserInputType.Keyboard then
-
-			bindKey = input.KeyCode
-			bindBtn.Text = "KEY: " .. input.KeyCode.Name
-
-			waitingBind = false
-
-			clickSound:Play()
-
-		end
-
-		if input.UserInputType == Enum.UserInputType.Keyboard then
-
-			if input.KeyCode == bindKey then
-
-				setJump(not jumpEnabled)
-
-			end
-		end
-	end)
-end
-
---------------------------------------------------
--- SMART MULTIPLIER LOOP
---------------------------------------------------
-
-RunService.RenderStepped:Connect(function()
-
-	if jumpEnabled then
-
-		local hum = getHum()
-
-		if hum then
-
-			local customJump = tonumber(jumpBox.Text)
-
-			if customJump and customJump > 0 then
-
-				if hum.JumpPower ~= customJump then
-					hum.JumpPower = customJump
-				end
-
-			else
-
-				local expected = originalJump * multiplier
-
-				if hum.JumpPower ~= expected then
-					hum.JumpPower = expected
-				end
-			end
-		end
-	else
-
-		updateOriginalJump()
-
-	end
-end)
-
---------------------------------------------------
--- RESPAWN SUPPORT
---------------------------------------------------
-
-player.CharacterAdded:Connect(function()
-
-	task.wait(1)
-
-	updateOriginalJump()
-
-	if jumpEnabled then
-		applyJump()
-	end
+	enableBlur()
+	playWhoosh()
 
 end)
